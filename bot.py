@@ -1,47 +1,3 @@
-import datetime
-import requests
-import time
-from threading import Thread
-from flask import Flask
-
-API_KEY = "4fa50b733dfe92033d0d6e767922eb0d"
-API_URL = "https://v3.football.api-sports.io"
-TELEGRAM_TOKEN = "8808972104:AAGYhnYvy8uFuEaP7EarknIvUB6viHkKReE"
-TELEGRAM_CHAT_ID = "1148090241"
-
-HEADERS = {"x-apisports-key": API_KEY}
-
-app = Flask(__name__)
-
-@app.route('/')
-def home():
-    return "🤖 Robô de Análise Estatística Avançada Rodando!"
-
-def rodar_web():
-    app.run(host="0.0.0.0", port=10000)
-
-def enviar_telegram(mensagem, chat_id=TELEGRAM_CHAT_ID):
-    if not TELEGRAM_TOKEN or not chat_id:
-        return
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    payload = {"chat_id": chat_id, "text": mensagem, "parse_mode": "HTML"}
-    try:
-        requests.post(url, json=payload, timeout=10)
-    except Exception as e:
-        print(f"Erro Telegram: {e}")
-
-def calcular_estatisticas_avancadas(home_id, away_id):
-    fator_h = (home_id % 30) / 100
-    fator_a = (away_id % 30) / 100
-    
-    over_15 = int(75 + (fator_h * 15) + (fator_a * 5))
-    over_25 = int(58 + (fator_h * 20) + (fator_a * 10))
-    
-    over_15 = min(max(over_15, 65), 94)
-    over_25 = min(max(over_25, 52), 86)
-    
-    return over_15, over_25
-
 def processar_jogos():
     data_str = datetime.date.today().strftime("%Y-%m-%d")
     url = f"{API_URL}/fixtures?date={data_str}&timezone=America/Sao_Paulo"
@@ -90,32 +46,4 @@ def processar_jogos():
 
     except Exception as e:
         print(f"Erro: {e}")
-        return f"⚠️ <i>Erro ao processar as partidas: {e}</i>""
-
-def escutar_telegram():
-    print("\nROBÔ COM ANÁLISE ESTATÍSTICA AVANÇADA ATIVO!\n")
-    offset = None
-    while True:
-        try:
-            url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates"
-            res = requests.get(url, params={"timeout": 20, "offset": offset}, timeout=25).json()
-            if res.get("ok"):
-                for result in res.get("result", []):
-                    offset = result["update_id"] + 1
-                    message = result.get("message", {})
-                    texto = message.get("text", "").strip().lower()
-                    from_chat = str(message.get("chat", {}).get("id"))
-
-                    if from_chat == TELEGRAM_CHAT_ID:
-                        if texto in ["/hoje", "hoje", "/jogos", "jogos", "/start"]:
-                            enviar_telegram("🔎 <i>Cruzando matrizes estatísticas e histórico recente...</i>", from_chat)
-                            enviar_telegram(processar_jogos(), from_chat)
-        except Exception:
-            time.sleep(2)
-
-if __name__ == "__main__":
-    t_web = Thread(target=rodar_web)
-    t_web.daemon = True
-    t_web.start()
-    
-    escutar_telegram()
+        return f"⚠️ <i>Erro ao processar as partidas: {e}</i>"
