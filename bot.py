@@ -47,7 +47,6 @@ def processar_jogos(dias_frente=0, filtro="todos"):
     data_alvo = datetime.date.today() + datetime.timedelta(days=dias_frente)
     data_str = data_alvo.strftime("%Y-%m-%d")
     
-    # URL limpa sem conflito de timezone da API para garantir o retorno dos jogos
     url = f"{API_URL}/fixtures?date={data_str}"
     
     try:
@@ -56,7 +55,7 @@ def processar_jogos(dias_frente=0, filtro="todos"):
         if response.status_code == 200:
             fixtures = response.json().get("response", [])
             
-        # Fallback de segurança: se a data exata vier vazia, tenta buscar a data seguinte para garantir conteúdo
+        # Se a data exata não retornar jogos, tenta buscar o dia seguinte automaticamente como contingência
         if not fixtures:
             data_alvo_alt = data_alvo + datetime.timedelta(days=1)
             data_str_alt = data_alvo_alt.strftime("%Y-%m-%d")
@@ -68,7 +67,7 @@ def processar_jogos(dias_frente=0, filtro="todos"):
                     data_str = data_str_alt
 
         if not fixtures:
-            return f"⚠️ <i>Não foram encontradas partidas ativas na API para esta data. Tente o comando /hoje.</i>"
+            return f"⚠️ <i>Não foram encontradas partidas cadastradas na API para a data {data_str}.</i>"
 
         titulo_filtro = "MERCADO GLOBAL"
         if filtro == "over15":
@@ -93,7 +92,6 @@ def processar_jogos(dias_frente=0, filtro="todos"):
             league = item['league']['name']
             country = item['league']['country']
             
-            # Tratamento seguro do horário UTC para exibição limpa
             raw_time = item['fixture']['date']
             try:
                 hora = raw_time.split("T")[1][:5]
@@ -102,14 +100,14 @@ def processar_jogos(dias_frente=0, filtro="todos"):
             
             p15, p25, btts = calcular_estatisticas_avancadas(home_id, away_id)
             
-            # Aplicação flexível dos filtros para nunca retornar vazio
-            if filtro == "over15" and p15 < 75:
+            # Filtros flexíveis para nunca deixar de mostrar jogos
+            if filtro == "over15" and p15 < 70:
                 continue
-            if filtro == "over25" and p25 < 60:
+            if filtro == "over25" and p25 < 55:
                 continue
-            if filtro == "btts" and btts < 55:
+            if filtro == "btts" and btts < 50:
                 continue
-            if filtro == "altagestao" and (p25 < 65 and p15 < 75):
+            if filtro == "altagestao" and (p25 < 60 and p15 < 70):
                 continue
 
             if contador >= 8:
@@ -129,7 +127,6 @@ def processar_jogos(dias_frente=0, filtro="todos"):
             msg += "━━━━━━━━━━━━━━━━━━━━━━\n\n"
             contador += 1
 
-        # Se o filtro específico foi muito restrito, traz a listagem geral para não deixar o chat em branco
         if contador == 0 and filtro != "todos":
             return processar_jogos(dias_frente=dias_frente, filtro="todos")
 
@@ -143,7 +140,7 @@ def processar_jogos(dias_frente=0, filtro="todos"):
         return f"⚠️ <i>Erro ao processar as partidas globais.</i>"
 
 def escutar_telegram():
-    print("\nROBÔ GLOBAL ROBUSTO ATIVO!\n")
+    print("\nROBÔ GLOBAL 100% FUNCIONAL ATIVO!\n")
     offset = None
     while True:
         try:
