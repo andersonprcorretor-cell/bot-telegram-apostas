@@ -12,12 +12,12 @@ TELEGRAM_CHAT_ID = "1148090241"
 
 HEADERS = {"x-apisports-key": API_KEY}
 
-# --- SERVIDOR WEB FALSO PARA O RENDER NÃO RECLAMAR DE PORTAS ---
+# --- SERVIDOR WEB PARA O RENDER ---
 app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "🤖 Robô de Análise de Futebol Rodando Perfeitamente com Sucesso!"
+    return "🤖 Robô de Análise de Futebol Rodando Perfeitamente!"
 
 def rodar_web():
     app.run(host="0.0.0.0", port=10000)
@@ -48,7 +48,10 @@ def processar_jogos():
         if response.status_code == 200:
             fixtures = response.json().get("response", [])
             if fixtures:
-                msg = f"⚽ <b>ANÁLISE PROFISSIONAL DE JOGOS</b>\n📅 Data: {data_str}\n\n"
+                msg = f"⚡ <b>PAINEL DE ANÁLISE TÁTICA & MERCADOS</b>\n"
+                msg += f"📅 <b>Data:</b> {data_str}\n"
+                msg += f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                
                 contador = 0
                 for item in fixtures:
                     if contador >= 5:
@@ -61,17 +64,24 @@ def processar_jogos():
                     
                     p15, p25 = calcular_probabilidade_gols(home, away)
                     
-                    msg += f"🏆 <b>{league}</b> | ⏰ {hora}\n"
-                    msg += f"⚔️ {home} x {away}\n"
-                    msg += f"📊 <b>Prognóstico:</b>\n"
-                    msg += f"⚽ Over 1.5: <b>{p15}%</b> | 🔥 Over 2.5: <b>{p25}%</b>\n\n"
+                    # Definindo um selo de confiança com base na porcentagem
+                    confianca = "🟢 Alta" if p25 >= 70 else "🟡 Média"
+                    
+                    msg += f"🏆 <b>{league}</b>\n"
+                    msg += f"⏰ <b>Horário:</b> {hora}\n"
+                    msg += f"⚔️ <b>{home}</b> vs <b>{away}</b>\n"
+                    msg += f"📊 <b>Prognósticos:</b>\n"
+                    msg += f"   • Over 1.5 Gols: <code>{p15}%</code>\n"
+                    msg += f"   • Over 2.5 Gols: <code>{p25}%</code>\n"
+                    msg += f"🎯 <b>Tendência:</b> {confianca}\n"
+                    msg += f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
                     contador += 1
                     
                 return msg
     except Exception as e:
         print(f"Erro ao buscar fixtures: {e}")
 
-    return "⚠️ <i>Não foram encontradas partidas com estatísticas suficientes para análise no momento de hoje.</i>"
+    return "⚠️ <i>Não foram encontradas partidas suficientes para análise no momento.</i>"
 
 def escutar_telegram():
     print("\n" + "="*40)
@@ -91,16 +101,14 @@ def escutar_telegram():
 
                     if from_chat == TELEGRAM_CHAT_ID:
                         if texto in ["/hoje", "hoje", "/jogos", "jogos", "/start"]:
-                            enviar_telegram("⏳ Processando dados estatísticos e cruzando probabilidades...", from_chat)
+                            enviar_telegram("⏳ <i>Buscando estatísticas e calculando tendências de mercado...</i>", from_chat)
                             enviar_telegram(processar_jogos(), from_chat)
         except Exception:
             time.sleep(2)
 
 if __name__ == "__main__":
-    # Inicia o servidor web em segundo plano para satisfazer o Render
     t_web = Thread(target=rodar_web)
     t_web.daemon = True
     t_web.start()
     
-    # Roda o bot do Telegram na linha principal
     escutar_telegram()
