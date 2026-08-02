@@ -85,11 +85,12 @@ def processar_jogos():
                 
                 if contador > 0:
                     return msg
+            
+            return "⚠️ <i>Nenhuma partida encontrada para os critérios atuais.</i>"
 
     except Exception as e:
         print(f"Erro: {e}")
-
-    return "⚠️ <i>Nenhuma partida encontrada para os critérios atuais.</i>"
+        return f"⚠️ <i>Erro ao processar as partidas: {e}</i>""
 
 def escutar_telegram():
     print("\nROBÔ COM ANÁLISE ESTATÍSTICA AVANÇADA ATIVO!\n")
