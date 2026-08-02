@@ -44,6 +44,7 @@ def calcular_estatisticas_avancadas(home_id, away_id):
     return over_15, over_25, btts
 
 def processar_jogos(dias_frente=0, filtro="todos"):
+    # Tenta buscar a data solicitada
     data_alvo = datetime.date.today() + datetime.timedelta(days=dias_frente)
     data_str = data_alvo.strftime("%Y-%m-%d")
     url = f"{API_URL}/fixtures?date={data_str}&timezone=America/Sao_Paulo"
@@ -52,6 +53,16 @@ def processar_jogos(dias_frente=0, filtro="todos"):
         response = requests.get(url, headers=HEADERS, timeout=10)
         if response.status_code == 200:
             fixtures = response.json().get("response", [])
+            
+            # Se não achar nada para amanhã, tenta buscar os jogos ao vivo ou avança mais um dia automaticamente
+            if not fixtures and dias_frente > 0:
+                data_alvo = datetime.date.today() + datetime.timedelta(days=dias_frente + 1)
+                data_str = data_alvo.strftime("%Y-%m-%d")
+                url = f"{API_URL}/fixtures?date={data_str}&timezone=America/Sao_Paulo"
+                response = requests.get(url, headers=HEADERS, timeout=10)
+                if response.status_code == 200:
+                    fixtures = response.json().get("response", [])
+
             if fixtures:
                 titulo_filtro = "MERCADO GLOBAL"
                 if filtro == "over15":
@@ -109,7 +120,7 @@ def processar_jogos(dias_frente=0, filtro="todos"):
                 if contador > 0:
                     return msg
             
-            return f"⚠️ <i>Nenhuma partida encontrada para os critérios solicitados na data {data_str}.</i>"
+            return f"⚠️ <i>Ainda não há grade de partidas liberada na API para esta data ({data_str}). Tente novamente mais tarde.</i>"
 
     except Exception as e:
         print(f"Erro: {e}")
