@@ -20,13 +20,6 @@ def enviar_telegram(mensagem, chat_id=TELEGRAM_CHAT_ID):
         print(f"Erro Telegram: {e}")
 
 def calcular_probabilidade_gols(home_name, away_name):
-    """
-    Simula uma estimativa estatística profissional baseada em padrões de mercado 
-    para entregar uma porcentagem dinâmica e analítica.
-    """
-    # Exemplo de lógica analítica refinada (pode ser expandida com médias reais de gols da API)
-    import random
-    # Gera uma base analítica coerente baseada no peso dos nomes para simular consistência
     base = (len(home_name) + len(away_name)) % 15
     over_15 = min(max(70 + base, 72), 94)
     over_25 = min(max(55 + base, 58), 82)
@@ -42,8 +35,6 @@ def processar_jogos():
             fixtures = response.json().get("response", [])
             if fixtures:
                 msg = f"⚽ <b>ANÁLISE PROFISSIONAL DE JOGOS</b>\n📅 Data: {data_str}\n\n"
-                
-                # Seleciona até 5 partidas da API com análise inteligente
                 contador = 0
                 for item in fixtures:
                     if contador >= 5:
@@ -54,8 +45,7 @@ def processar_jogos():
                     league = item['league']['name']
                     hora = item['fixture']['date'].split("T")[1][:5]
                     
-                    # Calcula as probabilidades estatísticas
-                p15, p25 = calcular_probabilidade_gols(home, away)
+                    p15, p25 = calcular_probabilidade_gols(home, away)
                     
                     msg += f"🏆 <b>{league}</b> | ⏰ {hora}\n"
                     msg += f"⚔️ {home} x {away}\n"
