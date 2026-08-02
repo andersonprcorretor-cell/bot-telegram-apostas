@@ -1,7 +1,10 @@
 import datetime
 import requests
 import time
+from threading import Thread
+from flask import Flask
 
+# --- CONFIGURAÇÕES ---
 API_KEY = "4fa50b733dfe92033d0d6e767922eb0d"
 API_URL = "https://v3.football.api-sports.io"
 TELEGRAM_TOKEN = "8808972104:AAGYhnYvy8uFuEaP7EarknIvUB6viHkKReE"
@@ -9,6 +12,17 @@ TELEGRAM_CHAT_ID = "1148090241"
 
 HEADERS = {"x-apisports-key": API_KEY}
 
+# --- SERVIDOR WEB FALSO PARA O RENDER NÃO RECLAMAR DE PORTAS ---
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "🤖 Robô de Análise de Futebol Rodando Perfeitamente com Sucesso!"
+
+def rodar_web():
+    app.run(host="0.0.0.0", port=10000)
+
+# --- FUNÇÕES DO BOT ---
 def enviar_telegram(mensagem, chat_id=TELEGRAM_CHAT_ID):
     if not TELEGRAM_TOKEN or not chat_id:
         return
@@ -61,7 +75,7 @@ def processar_jogos():
 
 def escutar_telegram():
     print("\n" + "="*40)
-    print("🤖 ROBÔ PROFISSIONAL ATIVO E RODANDO!")
+    print("🤖 ROBÔ PROFISSIONAL ATIVO E RODANDO NO RENDER!")
     print("="*40 + "\n")
     offset = None
     while True:
@@ -83,4 +97,10 @@ def escutar_telegram():
             time.sleep(2)
 
 if __name__ == "__main__":
+    # Inicia o servidor web em segundo plano para satisfazer o Render
+    t_web = Thread(target=rodar_web)
+    t_web.daemon = True
+    t_web.start()
+    
+    # Roda o bot do Telegram na linha principal
     escutar_telegram()
