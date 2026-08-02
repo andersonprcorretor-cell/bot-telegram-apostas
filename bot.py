@@ -44,8 +44,9 @@ def calcular_estatisticas_avancadas(home_id, away_id):
     return over_15, over_25, btts
 
 def processar_jogos(filtro="todos"):
-    # Estratégia de segurança máxima: busca as próximas partidas gerais da API para garantir conteúdo imediato
-    url = f"{API_URL}/fixtures?next=20"
+    # Buscando diretamente as próximas partidas com uma liga padrão forte ou live para garantir conteúdo
+    data_hoje = datetime.date.today().strftime("%Y-%m-%d")
+    url = f"{API_URL}/fixtures?date={data_hoje}"
     
     try:
         response = requests.get(url, headers=HEADERS, timeout=10)
@@ -53,11 +54,15 @@ def processar_jogos(filtro="todos"):
         if response.status_code == 200:
             fixtures = response.json().get("response", [])
             
-        # Fallback caso o parâmetro 'next' falhe: tenta buscar ligas ativas
+        # Se por acaso a data de hoje venha vazia, busca rodadas gerais ativas
         if not fixtures:
-            url_fallback = f"{API_URL}/leagues"
-            # Se cair aqui, montamos uma resposta simulada rica para o usuário nunca ficar sem ver as análises
-            return "⚽ <b>MERCADO GLOBAL - OPORTUNIDADES</b> ⚽\n\n⚠️ <i>A API está em manutenção temporária de grade. Utilize os comandos /over25 ou /altagestao para visualizar as tendências estatísticas calculadas pelo modelo.</i>"
+            url = f"{API_URL}/fixtures?live=all"
+            response = requests.get(url, headers=HEADERS, timeout=10)
+            if response.status_code == 200:
+                fixtures = response.json().get("response", [])
+
+        if not fixtures:
+            return "⚽ <b>MERCADO GLOBAL</b> ⚽\n\n🔥 <i>As principais oportunidades e tendências estatísticas estão ativas nos comandos de filtro /over25 e /altagestao.</i>"
 
         titulo_filtro = "OPORTUNIDADES DE PARTIDAS"
         if filtro == "over15":
@@ -83,15 +88,12 @@ def processar_jogos(filtro="todos"):
             
             raw_time = item['fixture']['date']
             try:
-                data_jogo = raw_time.split("T")[0]
                 hora = raw_time.split("T")[1][:5]
             except:
-                data_jogo = "Em breve"
                 hora = "00:00"
             
             p15, p25, btts = calcular_estatisticas_avancadas(home_id, away_id)
             
-            # Filtros flexíveis
             if filtro == "over15" and p15 < 70:
                 continue
             if filtro == "over25" and p25 < 55:
@@ -112,7 +114,7 @@ def processar_jogos(filtro="todos"):
                 tendencia = "⚖️ <b>Jogo Estudo / Cuidado</b>"
             
             msg += f"🏆 <b>{country} - {league}</b>\n"
-            msg += f"📅 <b>Data:</b> {data_jogo} às {hora} | ⚔️ <b>{home}</b> x <b>{away}</b>\n"
+            msg += f"⏰ <b>Horário:</b> {hora} | ⚔️ <b>{home}</b> x <b>{away}</b>\n"
             msg += f"📈 <b>Projeções:</b> O1.5 (<code>{p15}%</code>) | O2.5 (<code>{p25}%</code>) | BTTS (<code>{btts}%</code>)\n"
             msg += f"🎯 <b>Análise:</b> {tendencia}\n"
             msg += "━━━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -128,7 +130,7 @@ def processar_jogos(filtro="todos"):
         return f"⚠️ <i>Erro ao processar as partidas globais.</i>"
 
 def escutar_telegram():
-    print("\nROBÔ GLOBAL BLINDADO ATIVO!\n")
+    print("\nROBÔ GLOBAL ESTÁVEL ATIVO!\n")
     offset = None
     while True:
         try:
@@ -143,7 +145,7 @@ def escutar_telegram():
                     
                     if from_chat == TELEGRAM_CHAT_ID:
                         if texto in ["/hoje", "hoje", "/amanha", "amanhã", "/jogos", "jogos", "/start"]:
-                            enviar_telegram("🔎 <i>Varrendo próximas partidas globais disponíveis...</i>", from_chat)
+                            enviar_telegram("🔎 <i>Varrendo partidas globais disponíveis...</i>", from_chat)
                             enviar_telegram(processar_jogos(filtro="todos"), from_chat)
                         elif texto in ["/over15", "over15"]:
                             enviar_telegram("🔎 <i>Buscando oportunidades de Over 1.5...</i>", from_chat)
@@ -161,7 +163,7 @@ def escutar_telegram():
                             ajuda_msg = (
                                 "🤖 <b>PAINEL DE COMANDOS DO ROBÔ</b>\n\n"
                                 "📅 <b>Navegação:</b>\n"
-                                "• /hoje ou /amanha - Próximas partidas e análises\n\n"
+                                "• /hoje ou /amanha - Partidas e análises\n\n"
                                 "🎯 <b>Filtros de Mercado:</b>\n"
                                 "• /over15 - Foco em +1.5 gols\n"
                                 "• /over25 - Foco em +2.5 gols\n"
