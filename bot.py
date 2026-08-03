@@ -50,42 +50,24 @@ def processar_jogos(dias_frente=0, filtro="todos"):
     fixtures = []
     
     try:
-        # Tenta buscar pela data exata
         url = f"{API_URL}/fixtures?date={data_str}"
         response = requests.get(url, headers=HEADERS, timeout=10)
         if response.status_code == 200:
             fixtures = response.json().get("response", [])
             
-        # Se vier vazio, tenta buscar partidas ao vivo globais
         if not fixtures:
-            url_live = f"{API_URL}/fixtures?live=all"
-            resp_live = requests.get(url_live, headers=HEADERS, timeout=10)
-            if resp_live.status_code == 200:
-                fixtures = resp_live.json().get("response", [])
-
-        # Se ainda assim vier vazio (ex: fim de noite sem jogos), pega as próximas partidas gerais da API
-        if not fixtures:
-            url_next = f"{API_URL}/fixtures?next=10"
+            url_next = f"{API_URL}/fixtures?next=15"
             resp_next = requests.get(url_next, headers=HEADERS, timeout=10)
             if resp_next.status_code == 200:
                 fixtures = resp_next.json().get("response", [])
 
-        # Se por algum motivo extremo a API falhar completamente, geramos um card de painel estatístico ativo para nunca travar
         if not fixtures:
-            titulo_fallback = "⚽ PAINEL DE OPORTUNIDADES GLOBAIS"
-            msg = f"<b>{titulo_fallback}</b>\n\n"
-            msg += f"📅 <b>Referência:</b> {data_str}\n\n"
-            msg += f"🏆 <b>Mercado Principal - Tendências Ativas</b>\n"
-            msg += f"🔴 <i>A grade da API está entre rodadas no momento, mas os modelos estatísticos estão prontos.</i>\n"
-            msg += f"📈 <b>Projeção Média:</b> O1.5 (<code>85%</code>) | O2.5 (<code>70%</code>) | BTTS (<code>62%</code>)\n"
-            msg += f"🎯 <b>Indicativo:</b> Utilize os comandos rápidos /over25 ou /altagestao para varrer os melhores cenários.\n"
-            msg += "━━━━━━━━━━━━━━━━━━━━━━\n"
-            return msg
+            return f"⚽ <b>MERCADO GLOBAL</b>\n\n💡 <i>Nenhum jogo localizado na grade no momento. Utilize os comandos /over25 ou /altagestao para ver as projeções estatísticas ativas.</i>"
 
         if dias_frente > 0:
-            titulo_filtro = f"📅 PARTIDAS PROGRAMADAS ({data_str})"
+            titulo_filtro = f"📅 PRÓXIMAS PARTIDAS DA GRADE"
         else:
-            titulo_filtro = "⚽ PARTIDAS E JOGOS EM ANDAMENTO"
+            titulo_filtro = "⚽ PARTIDAS E PRÓXIMOS JOGOS DA GRADE"
 
         if filtro == "over15":
             titulo_filtro += " - [OVER 1.5]"
@@ -93,8 +75,10 @@ def processar_jogos(dias_frente=0, filtro="todos"):
             titulo_filtro += " - [OVER 2.5]"
         elif filtro == "btts":
             titulo_filtro += " - [AMBAS MARCAM]"
+        elif filtro == "moderados":
+            titulo_filtro += " - [FAIXA 60% A 80%]"
         elif filtro == "altagestao":
-            titulo_filtro += " - [ALTA GESTÃO]"
+            titulo_filtro += " - [ALTA CONFIANÇA / GESTÃO]"
 
         msg = f"<b>{titulo_filtro}</b>\n\n"
         
@@ -118,19 +102,24 @@ def processar_jogos(dias_frente=0, filtro="todos"):
             
             raw_time = item['fixture']['date']
             try:
+                data_jogo = raw_time.split("T")[0]
                 hora = raw_time.split("T")[1][:5]
             except:
+                data_jogo = data_str
                 hora = "00:00"
             
             p15, p25, btts = calcular_estatisticas_avancadas(home_id, away_id)
             
+            # Filtros aplicados
             if filtro == "over15" and p15 < 70:
                 continue
             if filtro == "over25" and p25 < 55:
                 continue
             if filtro == "btts" and btts < 50:
                 continue
-            if filtro == "altagestao" and (p25 < 60 and p15 < 70):
+            if filtro == "moderados" and not (60 <= p25 <= 80):
+                continue
+            if filtro == "altagestao" and (p25 < 75 and p15 < 85):
                 continue
 
             if contador >= 8:
@@ -139,16 +128,16 @@ def processar_jogos(dias_frente=0, filtro="todos"):
             if status_short in ["1H", "HT", "2H", "ET", "P"]:
                 status_txt = f"🔴 <b>AO VIVO ({elapsed}')</b>"
                 placar_txt = f"⚡ <b>Placar:</b> {home} {gols_home} x {gols_away} {away}\n"
-                tendencia = "🎯 <b>Indicativo Live:</b> Pressão alta para cantos e próximos gols."
             else:
-                status_txt = f"⏰ <b>Horário:</b> {hora}"
+                status_txt = f"⏰ <b>{data_jogo} às {hora}</b>"
                 placar_txt = f"⚔️ <b>{home}</b> x <b>{away}</b>\n"
-                if p25 >= 75:
-                    tendencia = "🔥 <b>Forte p/ Over 2.5 (Alta Pressão)</b>"
-                elif p25 >= 65:
-                    tendencia = "⚡ <b>Bom p/ Over 1.5 / Pré-live</b>"
-                else:
-                    tendencia = "⚖️ <b>Jogo Estudo / Cuidado</b>"
+            
+            if p25 >= 75:
+                tendencia = "🔥 <b>Forte p/ Over 2.5 (Alta Pressão)</b>"
+            elif p25 >= 60:
+                tendencia = "⚡ <b>Estável (Faixa Moderada 60-80%)</b>"
+            else:
+                tendencia = "⚖️ <b>Jogo Estudo / Cuidado</b>"
             
             msg += f"🏆 <b>{country} - {league}</b>\n"
             msg += f"{status_txt}\n"
@@ -161,14 +150,14 @@ def processar_jogos(dias_frente=0, filtro="todos"):
         if contador > 0:
             return msg
         
-        return f"⚽ <b>MERCADO GLOBAL ATIVO</b>\n\n🔥 <i>As tendências estatísticas e oportunidades calculadas estão prontas. Utilize os comandos /over25 ou /altagestao para visualizar as entradas.</i>"
+        return f"⚽ <b>MERCADO GLOBAL ATIVO</b>\n\n🔥 <i>Nenhum jogo encontrado com os critérios deste filtro no momento. Utilize /over25 ou /altagestao.</i>"
 
     except Exception as e:
         print(f"Erro: {e}")
         return f"⚽ <b>MERCADO GLOBAL</b>\n\n💡 <i>Sistema operando normalmente. Use /over25 para ver as principais tendências de gols.</i>"
 
 def escutar_telegram():
-    print("\nROBÔ GLOBAL BLINDADO CONTRA VAZIOS ATIVO!\n")
+    print("\nROBÔ GLOBAL COM NOVOS FILTROS ATIVO!\n")
     offset = None
     while True:
         try:
@@ -183,11 +172,17 @@ def escutar_telegram():
                     
                     if from_chat == TELEGRAM_CHAT_ID:
                         if texto in ["/hoje", "hoje", "/jogos", "jogos", "/start"]:
-                            enviar_telegram("🔎 <i>Varrendo partidas de hoje...</i>", from_chat)
+                            enviar_telegram("⏳ <i>Buscando partidas do dia...</i>", from_chat)
                             enviar_telegram(processar_jogos(dias_frente=0, filtro="todos"), from_chat)
                         elif texto in ["/amanha", "amanhã"]:
-                            enviar_telegram("🔎 <i>Varrendo partidas de amanhã...</i>", from_chat)
+                            enviar_telegram("⏳ <i>Buscando partidas de amanhã...</i>", from_chat)
                             enviar_telegram(processar_jogos(dias_frente=1, filtro="todos"), from_chat)
+                        elif texto in ["/moderados", "moderados", "/6080"]:
+                            enviar_telegram("🔎 <i>Filtrando oportunidades entre 60% e 80%...</i>", from_chat)
+                            enviar_telegram(processar_jogos(dias_frente=0, filtro="moderados"), from_chat)
+                        elif texto in ["/altagestao", "altagestao", "/sinais", "/alta"]:
+                            enviar_telegram("🔎 <i>Buscando entradas de alta confiança / gestão...</i>", from_chat)
+                            enviar_telegram(processar_jogos(dias_frente=0, filtro="altagestao"), from_chat)
                         elif texto in ["/over15", "over15"]:
                             enviar_telegram("🔎 <i>Buscando oportunidades de Over 1.5...</i>", from_chat)
                             enviar_telegram(processar_jogos(dias_frente=0, filtro="over15"), from_chat)
@@ -197,20 +192,18 @@ def escutar_telegram():
                         elif texto in ["/btts", "btts", "ambas"]:
                             enviar_telegram("🔎 <i>Buscando mercados de Ambas Marcam...</i>", from_chat)
                             enviar_telegram(processar_jogos(dias_frente=0, filtro="btts"), from_chat)
-                        elif texto in ["/altagestao", "altagestao", "/sinais"]:
-                            enviar_telegram("🔎 <i>Buscando entradas de alta probabilidade...</i>", from_chat)
-                            enviar_telegram(processar_jogos(dias_frente=0, filtro="altagestao"), from_chat)
                         elif texto in ["/ajuda", "/help", "ajuda"]:
                             ajuda_msg = (
                                 "🤖 <b>PAINEL DE COMANDOS DO ROBÔ</b>\n\n"
                                 "📅 <b>Navegação:</b>\n"
-                                "• /hoje - Jogos e partidas ao vivo\n"
-                                "• /amanha - Jogos e análises de amanhã\n\n"
-                                "🎯 <b>Filtros de Mercado:</b>\n"
+                                "• /hoje - Jogos do dia\n"
+                                "• /amanha - Próximas partidas\n\n"
+                                "🎯 <b>Filtros Específicos & Gols:</b>\n"
+                                "• /moderados - Oportunidades entre 60% e 80%\n"
+                                "• /altagestao - Entradas de alta confiança\n"
                                 "• /over15 - Foco em +1.5 gols\n"
                                 "• /over25 - Foco em +2.5 gols\n"
                                 "• /btts - Ambas Marcam\n"
-                                "• /altagestao - Melhores oportunidades\n"
                             )
                             enviar_telegram(ajuda_msg, from_chat)
         except Exception:
