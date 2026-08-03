@@ -7,9 +7,7 @@ API_URL = "https://v3.football.api-sports.io"
 TELEGRAM_TOKEN = "8808972104:AAGYhnYvy8uFuEaP7EarknIvUB6viHkKReE"
 TELEGRAM_CHAT_ID = "1148090241"
 
-# URL corrigida com o "s" no final ("bot-telegram-apostas")
 RENDER_URL = "https://bot-telegram-apostas.onrender.com"
-
 HEADERS = {"x-apisports-key": API_KEY}
 
 app = Flask(__name__)
@@ -38,50 +36,28 @@ def calcular_estatisticas_avancadas(home_id, away_id):
     return over_15, over_25, btts
 
 def processar_jogos(dias_frente=0, filtro="todos"):
-    data_alvo = datetime.date.today() + datetime.timedelta(days=dias_frente)
-    data_str = data_alvo.strftime("%Y-%m-%d")
-    
     fixtures = []
     
     try:
-        url_date = f"{API_URL}/fixtures?date={data_str}&season=2026"
-        print(f"Consultando API (Data): {url_date}")
-        resp = requests.get(url_date, headers=HEADERS, timeout=10)
+        # Busca direta na grade oficial da API usando a listagem 'next' (que traz os próximos jogos reais programados)
+        url_next = f"{API_URL}/fixtures?next=30"
+        print(f"Consultando Grade Real da API: {url_next}")
+        resp = requests.get(url_next, headers=HEADERS, timeout=10)
+        
         if resp.status_code == 200:
-            fixtures = resp.json().get("response", [])
-            print(f"Jogos encontrados na Data ({data_str}): {len(fixtures)}")
+            data_json = resp.json()
+            fixtures = data_json.get("response", [])
+            print(f"Total de jogos reais encontrados na grade: {len(fixtures)}")
 
         if not fixtures:
-            url_next = f"{API_URL}/fixtures?next=20"
-            print(f"Consultando API (Next): {url_next}")
-            resp_next = requests.get(url_next, headers=HEADERS, timeout=10)
-            if resp_next.status_code == 200:
-                fixtures = resp_next.json().get("response", [])
-                print(f"Jogos encontrados via Next: {len(fixtures)}")
+            return f"⚽ <b>MERCADO GLOBAL</b>\n\n💡 <i>A API não retornou partidas ativas na grade no momento. Tente novamente em instantes.</i>"
 
-        if not fixtures:
-            url_league = f"{API_URL}/fixtures?league=71&season=2026"
-            print(f"Consultando API (League 71): {url_league}")
-            resp_league = requests.get(url_league, headers=HEADERS, timeout=10)
-            if resp_league.status_code == 200:
-                fixtures = resp_league.json().get("response", [])
-                print(f"Jogos encontrados na Liga 71: {len(fixtures)}")
-
-        if not fixtures:
-            return f"⚽ <b>MERCADO GLOBAL</b>\n\n💡 <i>Nenhum jogo localizado na grade da API no momento.</i>"
-
-        titulo_filtro = "📅 PRÓXIMAS PARTIDAS DA GRADE" if dias_frente > 0 else "⚽ PARTIDAS E PRÓXIMOS JOGOS DA GRADE"
-
-        if filtro == "over15":
-            titulo_filtro += " - [OVER 1.5]"
-        elif filtro == "over25":
-            titulo_filtro += " - [OVER 2.5]"
-        elif filtro == "btts":
-            titulo_filtro += " - [AMBAS MARCAM]"
-        elif filtro == "moderados":
-            titulo_filtro += " - [FAIXA 60% A 80%]"
-        elif filtro == "altagestao":
-            titulo_filtro += " - [ALTA CONFIANÇA / GESTÃO]"
+        titulo_filtro = "📅 GRADE DE PARTIDAS REAIS"
+        if filtro == "over15": titulo_filtro += " - [OVER 1.5]"
+        elif filtro == "over25": titulo_filtro += " - [OVER 2.5]"
+        elif filtro == "btts": titulo_filtro += " - [AMBAS MARCAM]"
+        elif filtro == "moderados": titulo_filtro += " - [FAIXA 60% A 80%]"
+        elif filtro == "altagestao": titulo_filtro += " - [ALTA CONFIANÇA / GESTÃO]"
 
         msg = f"<b>{titulo_filtro}</b>\n\n"
         
@@ -102,12 +78,16 @@ def processar_jogos(dias_frente=0, filtro="todos"):
                 gols_home = item['goals']['home'] or 0
                 gols_away = item['goals']['away'] or 0
                 
-                raw_time = item['fixture']['date']
+                raw_time = item['fixture']['date'] # Ex: 2026-08-03T20:00:00+00:00
                 try:
                     data_jogo = raw_time.split("T")[0]
-                    hora = raw_time.split("T")[1][:5]
+                    # Ajuste simples de horário UTC para o formato hora local (aproximação da grade real)
+                    hora_utc = raw_time.split("T")[1][:5]
+                    h_int = int(hora_utc.split(":")[0]) - 3 # Ajuste para horário de Brasília (UTC-3)
+                    if h_int < 0: h_int += 24
+                    hora = f"{h_int:02d}:{hora_utc.split(':')[1]}"
                 except:
-                    data_jogo = data_str
+                    data_jogo = "Hoje"
                     hora = "00:00"
                 
                 p15, p25, btts = calcular_estatisticas_avancadas(home_id, away_id)
@@ -124,7 +104,7 @@ def processar_jogos(dias_frente=0, filtro="todos"):
                     status_txt = f"🔴 <b>AO VIVO ({elapsed}')</b>"
                     placar_txt = f"⚡ <b>Placar:</b> {home} {gols_home} x {gols_away} {away}\n"
                 else:
-                    status_txt = f"⏰ <b>{data_jogo} às {hora}</b>"
+                    status_txt = f"⏰ <b>{data_jogo} às {hora} (Brasília)</b>"
                     placar_txt = f"⚔️ <b>{home}</b> x <b>{away}</b>\n"
                 
                 if p25 >= 75:
@@ -144,19 +124,18 @@ def processar_jogos(dias_frente=0, filtro="todos"):
             except Exception:
                 continue
 
-        return msg if contador > 0 else f"⚽ <b>MERCADO GLOBAL ATIVO</b>\n\n🔥 <i>Nenhum jogo encontrado com os critérios deste filtro.</i>"
+        return msg if contador > 0 else f"⚽ <b>MERCADO GLOBAL ATIVO</b>\n\n🔥 <i>Nenhum jogo encontrado com os critérios deste filtro na grade atual.</i>"
     except Exception as e:
         print(f"Erro geral: {e}")
-        return f"⚽ <b>MERCADO GLOBAL</b>\n\n💡 <i>Erro ao consultar os dados da API.</i>"
+        return f"⚽ <b>MERCADO GLOBAL</b>\n\n💡 <i>Erro ao consultar os dados reais da API.</i>"
 
 @app.route('/')
 def home():
-    return "🤖 Robô Webhook Ativo com Sucesso!"
+    return "🤖 Robô de Grade Real Ativo!"
 
 @app.route(f'/{TELEGRAM_TOKEN}', methods=['POST'])
 def webhook():
     data = request.get_json()
-    print(f"Mensagem recebida do Telegram: {data}")
     if data and "message" in data:
         message = data["message"]
         texto = message.get("text", "").strip().lower()
@@ -164,10 +143,10 @@ def webhook():
         
         if from_chat == TELEGRAM_CHAT_ID:
             if texto in ["/hoje", "hoje", "/jogos", "jogos", "/start"]:
-                enviar_telegram("⏳ <i>Buscando partidas do dia...</i>", from_chat)
+                enviar_telegram("⏳ <i>Buscando grade real de partidas...</i>", from_chat)
                 enviar_telegram(processar_jogos(dias_frente=0, filtro="todos"), from_chat)
             elif texto in ["/amanha", "amanhã"]:
-                enviar_telegram("⏳ <i>Buscando partidas de amanhã...</i>", from_chat)
+                enviar_telegram("⏳ <i>Buscando próximas partidas da grade...</i>", from_chat)
                 enviar_telegram(processar_jogos(dias_frente=1, filtro="todos"), from_chat)
             elif texto in ["/moderados", "moderados", "/6080"]:
                 enviar_telegram("🔎 <i>Filtrando oportunidades entre 60% e 80%...</i>", from_chat)
@@ -188,7 +167,7 @@ def webhook():
                 ajuda_msg = (
                     "🤖 <b>PAINEL DE COMANDOS DO ROBÔ</b>\n\n"
                     "📅 <b>Navegação:</b>\n"
-                    "• /hoje - Jogos do dia\n"
+                    "• /hoje - Grade de jogos reais\n"
                     "• /amanha - Próximas partidas\n\n"
                     "🎯 <b>Filtros Específicos & Gols:</b>\n"
                     "• /moderados - Oportunidades entre 60% e 80%\n"
@@ -203,8 +182,7 @@ def webhook():
 def configurar_webhook():
     url_webhook = f"{RENDER_URL}/{TELEGRAM_TOKEN}"
     req_url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/setWebhook?url={url_webhook}"
-    res = requests.get(req_url).json()
-    print(f"Configuração do Webhook: {res}")
+    requests.get(req_url)
 
 if __name__ == "__main__":
     configurar_webhook()
