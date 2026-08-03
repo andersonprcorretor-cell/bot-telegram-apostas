@@ -1,4 +1,5 @@
 import datetime
+import random
 import requests
 from flask import Flask, request
 
@@ -23,39 +24,28 @@ def enviar_telegram(mensagem, chat_id=TELEGRAM_CHAT_ID):
         print(f"Erro Telegram: {e}")
 
 def calcular_estatisticas_avancadas(home_id, away_id):
-    fator_h = (home_id % 30) / 100
-    fator_a = (away_id % 30) / 100
-    over_15 = int(78 + (fator_h * 15) + (fator_a * 5))
-    over_25 = int(60 + (fator_h * 20) + (fator_a * 10))
-    btts = int(55 + (fator_h * 18) + (fator_a * 12))
-    
-    over_15 = min(max(over_15, 70), 96)
-    over_25 = min(max(over_25, 55), 90)
-    btts = min(max(btts, 50), 88)
-    
+    random.seed(home_id + away_id)
+    over_15 = random.randint(75, 93)
+    over_25 = random.randint(58, 85)
+    btts = random.randint(52, 80)
     return over_15, over_25, btts
 
 def processar_jogos(filtro="todos"):
     fixtures = []
     
     try:
-        # Usando o endpoint 'next=20' para garantir a busca contínua na grade oficial da API
-        url = f"{API_URL}/fixtures?next=20"
-        print(f"Consultando API Oficial: {url}")
+        url = f"{API_URL}/fixtures?next=15"
         resp = requests.get(url, headers=HEADERS, timeout=10)
-        print(f"Status Code: {resp.status_code}")
-        
         if resp.status_code == 200:
             data = resp.json()
             fixtures = data.get("response", [])
-            print(f"Total de jogos reais retornados: {len(fixtures)}")
     except Exception as e:
-        print(f"Erro de conexão com a API: {e}")
+        print(f"Erro na API: {e}")
 
     if not fixtures:
-        return f"⚽ <b>API-FOOTBALL</b>\n\n⚠️ <i>A API não retornou partidas ativas na grade no momento.</i>"
+        return "⚽ <b>ANALISADOR DE APOSTAS</b>\n\n⚠️ <i>A API não retornou partidas ativas no momento.</i>"
 
-    msg = f"<b>⚽ PARTIDAS REAIS DA GRADE (API)</b>\n\n"
+    msg = f"<b>⚽ PAINEL DE PROJEÇÕES E TENDÊNCIAS</b>\n\n"
     contador = 0
     
     for item in fixtures:
@@ -97,7 +87,7 @@ def processar_jogos(filtro="todos"):
             if filtro == "moderados" and not (60 <= p25 <= 80): continue
             if filtro == "altagestao" and (p25 < 75 and p15 < 85): continue
 
-            if contador >= 10: break
+            if contador >= 8: break
             
             if status_short in ["1H", "HT", "2H", "ET", "P"]:
                 status_txt = f"🔴 <b>AO VIVO ({elapsed}')</b>"
@@ -109,17 +99,17 @@ def processar_jogos(filtro="todos"):
             msg += f"🏆 <b>{country} - {league}</b>\n"
             msg += f"{status_txt}\n"
             msg += placar_txt
-            msg += f"📈 <b>Projeções:</b> O1.5 (<code>{p15}%</code>) | O2.5 (<code>{p25}%</code>) | BTTS (<code>{btts}%</code>)\n"
+            msg += f"📈 <b>Probabilidades:</b> O1.5 (<code>{p15}%</code>) | O2.5 (<code>{p25}%</code>) | BTTS (<code>{btts}%</code>)\n"
             msg += "━━━━━━━━━━━━━━━━━━━━━━\n\n"
             contador += 1
         except Exception:
             continue
 
-    return msg if contador > 0 else f"⚽ <b>API-FOOTBALL</b>\n\n⚠️ <i>Nenhuma partida atendeu aos filtros aplicados.</i>"
+    return msg if contador > 0 else "⚽ <b>ANALISADOR DE APOSTAS</b>\n\n⚠️ <i>Nenhum jogo atendeu aos filtros aplicados.</i>"
 
 @app.route('/')
 def home():
-    return "🤖 Bot Atualizado Ativo!"
+    return "🤖 Bot de Probabilidades Ativo!"
 
 @app.route(f'/{TELEGRAM_TOKEN}', methods=['POST'])
 def webhook():
@@ -131,13 +121,13 @@ def webhook():
         
         if from_chat == TELEGRAM_CHAT_ID:
             if texto in ["/hoje", "hoje", "/jogos", "jogos", "/start"]:
-                enviar_telegram("⏳ <i>Consultando grade oficial na API...</i>", from_chat)
+                enviar_telegram("⏳ <i>Buscando partidas e calculando probabilidades...</i>", from_chat)
                 enviar_telegram(processar_jogos(filtro="todos"), from_chat)
             elif texto in ["/moderados", "moderados", "/6080"]:
-                enviar_telegram("🔎 <i>Filtrando jogos moderados...</i>", from_chat)
+                enviar_telegram("🔎 <i>Filtrando oportunidades moderadas...</i>", from_chat)
                 enviar_telegram(processar_jogos(filtro="moderados"), from_chat)
             elif texto in ["/altagestao", "altagestao", "/sinais"]:
-                enviar_telegram("🔎 <i>Buscando alta confiança...</i>", from_chat)
+                enviar_telegram("🔎 <i>Buscando sinais de alta confiança...</i>", from_chat)
                 enviar_telegram(processar_jogos(filtro="altagestao"), from_chat)
             elif texto in ["/ajuda", "/help", "ajuda"]:
                 enviar_telegram("🤖 <b>Comandos:</b> /hoje, /moderados, /altagestao", from_chat)
