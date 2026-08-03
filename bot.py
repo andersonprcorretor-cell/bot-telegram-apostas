@@ -15,7 +15,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "🤖 Robô de Análise Estatística Global Rodando!"
+    return "🤖 Robô de Análise Estatística Global Rodando Perfeitamente!"
 
 def rodar_web():
     app.run(host="0.0.0.0", port=10000)
@@ -50,28 +50,37 @@ def processar_jogos(dias_frente=0, filtro="todos"):
     fixtures = []
     
     try:
-        # 1. Tenta buscar jogos ao vivo ou da data específica informando a season atual (2026)
-        url = f"{API_URL}/fixtures?date={data_str}&season=2026"
-        response = requests.get(url, headers=HEADERS, timeout=10)
-        if response.status_code == 200:
-            fixtures = response.json().get("response", [])
-            
-        # 2. Se não vier nada por data, busca as partidas correntes/próximas gerais
-        if not fixtures:
-            url_live = f"{API_URL}/fixtures?live=all"
-            resp_live = requests.get(url_live, headers=HEADERS, timeout=10)
-            if resp_live.status_code == 200:
-                fixtures = resp_live.json().get("response", [])
+        # TENTATIVA 1: Busca por data específica com season 2026
+        url_date = f"{API_URL}/fixtures?date={data_str}&season=2026"
+        print(f"Consultando API (Data): {url_date}")
+        resp = requests.get(url_date, headers=HEADERS, timeout=10)
+        if resp.status_code == 200:
+            dados = resp.json()
+            fixtures = dados.get("response", [])
+            print(f"Jogos encontrados na Data ({data_str}): {len(fixtures)}")
 
-        # 3. Se ainda estiver vazio, busca os jogos da principal liga ativa (Ex: Brasileirão ID 71 ou Premier League ID 39)
+        # TENTATIVA 2: Se vier vazio, busca os próximos 20 jogos gerais da API
+        if not fixtures:
+            url_next = f"{API_URL}/fixtures?next=20"
+            print(f"Consultando API (Next): {url_next}")
+            resp_next = requests.get(url_next, headers=HEADERS, timeout=10)
+            if resp_next.status_code == 200:
+                dados_next = resp_next.json()
+                fixtures = dados_next.get("response", [])
+                print(f"Jogos encontrados via Next: {len(fixtures)}")
+
+        # TENTATIVA 3: Se ainda estiver vazio, busca os jogos da principal liga ativa (Brasileirão - ID 71)
         if not fixtures:
             url_league = f"{API_URL}/fixtures?league=71&season=2026"
+            print(f"Consultando API (League 71): {url_league}")
             resp_league = requests.get(url_league, headers=HEADERS, timeout=10)
             if resp_league.status_code == 200:
-                fixtures = resp_league.json().get("response", [])
+                dados_league = resp_league.json()
+                fixtures = dados_league.get("response", [])
+                print(f"Jogos encontrados na Liga 71: {len(fixtures)}")
 
         if not fixtures:
-            return f"⚽ <b>MERCADO GLOBAL</b>\n\n💡 <i>Nenhum jogo localizado na grade para esta data no momento. Tente novamente mais tarde.</i>"
+            return f"⚽ <b>MERCADO GLOBAL</b>\n\n💡 <i>Nenhum jogo localizado na grade da API no momento. A cota da API pode ter sido atingida ou não há partidas programadas para agora.</i>"
 
         if dias_frente > 0:
             titulo_filtro = f"📅 PRÓXIMAS PARTIDAS DA GRADE"
@@ -93,68 +102,72 @@ def processar_jogos(dias_frente=0, filtro="todos"):
         
         contador = 0
         for item in fixtures:
-            home = item['teams']['home']['name']
-            home_id = item['teams']['home']['id']
-            away = item['teams']['away']['name']
-            away_id = item['teams']['away']['id']
-            
-            league = item['league']['name']
-            country = item['league']['country']
-            
-            status_short = item['fixture']['status']['short']
-            elapsed = item['fixture']['status']['elapsed']
-            
-            gols_home = item['goals']['home']
-            gols_away = item['goals']['away']
-            if gols_home is None: gols_home = 0
-            if gols_away is None: gols_away = 0
-            
-            raw_time = item['fixture']['date']
             try:
-                data_jogo = raw_time.split("T")[0]
-                hora = raw_time.split("T")[1][:5]
-            except:
-                data_jogo = data_str
-                hora = "00:00"
-            
-            p15, p25, btts = calcular_estatisticas_avancadas(home_id, away_id)
-            
-            # Filtros aplicados rigidamente
-            if filtro == "over15" and p15 < 70:
-                continue
-            if filtro == "over25" and p25 < 55:
-                continue
-            if filtro == "btts" and btts < 50:
-                continue
-            if filtro == "moderados" and not (60 <= p25 <= 80):
-                continue
-            if filtro == "altagestao" and (p25 < 75 and p15 < 85):
-                continue
+                home = item['teams']['home']['name']
+                home_id = item['teams']['home']['id']
+                away = item['teams']['away']['name']
+                away_id = item['teams']['away']['id']
+                
+                league = item['league']['name']
+                country = item['league']['country']
+                
+                status_short = item['fixture']['status']['short']
+                elapsed = item['fixture']['status']['elapsed']
+                
+                gols_home = item['goals']['home']
+                gols_away = item['goals']['away']
+                if gols_home is None: gols_home = 0
+                if gols_away is None: gols_away = 0
+                
+                raw_time = item['fixture']['date']
+                try:
+                    data_jogo = raw_time.split("T")[0]
+                    hora = raw_time.split("T")[1][:5]
+                except:
+                    data_jogo = data_str
+                    hora = "00:00"
+                
+                p15, p25, btts = calcular_estatisticas_avancadas(home_id, away_id)
+                
+                # Filtros aplicados rigidamente
+                if filtro == "over15" and p15 < 70:
+                    continue
+                if filtro == "over25" and p25 < 55:
+                    continue
+                if filtro == "btts" and btts < 50:
+                    continue
+                if filtro == "moderados" and not (60 <= p25 <= 80):
+                    continue
+                if filtro == "altagestao" and (p25 < 75 and p15 < 85):
+                    continue
 
-            if contador >= 8:
-                break
-            
-            if status_short in ["1H", "HT", "2H", "ET", "P"]:
-                status_txt = f"🔴 <b>AO VIVO ({elapsed}')</b>"
-                placar_txt = f"⚡ <b>Placar:</b> {home} {gols_home} x {gols_away} {away}\n"
-            else:
-                status_txt = f"⏰ <b>{data_jogo} às {hora}</b>"
-                placar_txt = f"⚔️ <b>{home}</b> x <b>{away}</b>\n"
-            
-            if p25 >= 75:
-                tendencia = "🔥 <b>Forte p/ Over 2.5 (Alta Pressão)</b>"
-            elif p25 >= 60:
-                tendencia = "⚡ <b>Estável (Faixa Moderada 60-80%)</b>"
-            else:
-                tendencia = "⚖️ <b>Jogo Estudo / Cuidado</b>"
-            
-            msg += f"🏆 <b>{country} - {league}</b>\n"
-            msg += f"{status_txt}\n"
-            msg += placar_txt
-            msg += f"📈 <b>Projeções:</b> O1.5 (<code>{p15}%</code>) | O2.5 (<code>{p25}%</code>) | BTTS (<code>{btts}%</code>)\n"
-            msg += f"{tendencia}\n"
-            msg += "━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            contador += 1
+                if contador >= 8:
+                    break
+                
+                if status_short in ["1H", "HT", "2H", "ET", "P"]:
+                    status_txt = f"🔴 <b>AO VIVO ({elapsed}')</b>"
+                    placar_txt = f"⚡ <b>Placar:</b> {home} {gols_home} x {gols_away} {away}\n"
+                else:
+                    status_txt = f"⏰ <b>{data_jogo} às {hora}</b>"
+                    placar_txt = f"⚔️ <b>{home}</b> x <b>{away}</b>\n"
+                
+                if p25 >= 75:
+                    tendencia = "🔥 <b>Forte p/ Over 2.5 (Alta Pressão)</b>"
+                elif p25 >= 60:
+                    tendencia = "⚡ <b>Estável (Faixa Moderada 60-80%)</b>"
+                else:
+                    tendencia = "⚖️ <b>Jogo Estudo / Cuidado</b>"
+                
+                msg += f"🏆 <b>{country} - {league}</b>\n"
+                msg += f"{status_txt}\n"
+                msg += placar_txt
+                msg += f"📈 <b>Projeções:</b> O1.5 (<code>{p15}%</code>) | O2.5 (<code>{p25}%</code>) | BTTS (<code>{btts}%</code>)\n"
+                msg += f"{tendencia}\n"
+                msg += "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                contador += 1
+            except Exception as inner_e:
+                print(f"Erro ao processar item individual: {inner_e}")
+                continue
 
         if contador > 0:
             return msg
@@ -162,11 +175,11 @@ def processar_jogos(dias_frente=0, filtro="todos"):
         return f"⚽ <b>MERCADO GLOBAL ATIVO</b>\n\n🔥 <i>Nenhum jogo encontrado com os critérios deste filtro na grade atual.</i>"
 
     except Exception as e:
-        print(f"Erro: {e}")
-        return f"⚽ <b>MERCADO GLOBAL</b>\n\n💡 <i>Erro ao consultar os dados da API. Tente novamente em instantes.</i>"
+        print(f"Erro geral no processamento: {e}")
+        return f"⚽ <b>MERCADO GLOBAL</b>\n\n💡 <i>Erro ao consultar os dados da API. Verifique os logs do servidor.</i>"
 
 def escutar_telegram():
-    print("\nROBÔ GLOBAL COM SEASON 2026 ATIVO!\n")
+    print("\nROBÔ GLOBAL ROBUSTO COM TRIPLACE FALLBACK INICIADO!\n")
     offset = None
     while True:
         try:
@@ -192,7 +205,8 @@ def escutar_telegram():
                         elif texto in ["/altagestao", "altagestao", "/sinais", "/alta"]:
                             enviar_telegram("🔎 <i>Buscando entradas de alta confiança / gestão...</i>", from_chat)
                             enviar_telegram(processar_jogos(dias_frente=0, filtro="altagestao"), from_chat)
-                        elif texto in ["/over15", "over15"]:
+                        elif_texto_over15 = texto in ["/over15", "over15"]
+                        if if_texto_over15 or texto in ["/over15", "over15"]:
                             enviar_telegram("🔎 <i>Buscando oportunidades de Over 1.5...</i>", from_chat)
                             enviar_telegram(processar_jogos(dias_frente=0, filtro="over15"), from_chat)
                         elif texto in ["/over25", "over25"]:
@@ -215,7 +229,8 @@ def escutar_telegram():
                                 "• /btts - Ambas Marcam\n"
                             )
                             enviar_telegram(ajuda_msg, from_chat)
-        except Exception:
+        except Exception as e:
+            print(f"Erro no loop do Telegram: {e}")
             time.sleep(2)
 
 if __name__ == "__main__":
