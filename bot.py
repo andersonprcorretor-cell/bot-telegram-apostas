@@ -36,37 +36,30 @@ def calcular_estatisticas_avancadas(home_id, away_id):
     return over_15, over_25, btts
 
 def processar_jogos(filtro="todos"):
-    fixtures = []
     data_hoje = datetime.date.today().strftime("%Y-%m-%d")
+    fixtures = []
     
     try:
-        # Tenta buscar da API oficial
         url = f"{API_URL}/fixtures?date={data_hoje}"
         resp = requests.get(url, headers=HEADERS, timeout=10)
         if resp.status_code == 200:
-            fixtures = resp.json().get("response", [])
+            data = resp.json()
+            fixtures = data.get("response", [])
     except Exception as e:
-        print(f"Aviso API: {e}")
+        print(f"Erro na API: {e}")
 
-    # Fallback inteligente definitivo: se a API retornar vazia (limitação do plano gratuito), 
-    # injetamos partidas reais e dinâmicas do dia para que o bot nunca falhe para você.
     if not fixtures:
-        fixtures = [
-            {"teams": {"home": {"name": "Flamengo", "id": 121}, "away": {"name": "Palmeiras", "id": 122}}, "league": {"name": "Brasileirão Série A", "country": "Brasil"}, "fixture": {"status": {"short": "NS", "elapsed": None}, "date": f"{data_hoje}T20:00:00"}, "goals": {"home": None, "away": None}},
-            {"teams": {"home": {"name": "Real Madrid", "id": 541}, "away": {"name": "Barcelona", "id": 529}}, "league": {"name": "La Liga", "country": "Espanha"}, "fixture": {"status": {"short": "NS", "elapsed": None}, "date": f"{data_hje if 'data_hje' in locals() else data_hoje}T21:00:00"}, "goals": {"home": None, "away": None}},
-            {"teams": {"home": {"name": "Manchester City", "id": 50}, "away": {"name": "Arsenal", "id": 42}}, "league": {"name": "Premier League", "country": "Inglaterra"}, "fixture": {"status": {"short": "NS", "elapsed": None}, "date": f"{data_hoje}T16:30:00"}, "goals": {"home": None, "away": None}},
-            {"teams": {"home": {"name": "River Plate", "id": 435}, "away": {"name": "Boca Juniors", "id": 451}}, "league": {"name": "Liga Profesional", "country": "Argentina"}, "fixture": {"status": {"short": "NS", "elapsed": None}, "date": f"{data_hoje}T19:15:00"}, "goals": {"home": None, "away": None}}
-        ]
+        return f"⚽ <b>API-FOOTBALL</b>\n\n⚠️ <i>A API não retornou nenhuma partida oficial cadastrada para a data de hoje ({data_hoje}). Nenhum dado simulado foi injetado.</i>"
 
-    msg = f"<b>⚽ PAINEL DE ANÁLISE E TENDÊNCIAS</b>\n\n"
+    msg = f"<b>⚽ PARTIDAS REAIS DA API ({data_hoje})</b>\n\n"
     contador = 0
     
     for item in fixtures:
         try:
             teams = item.get('teams', {})
-            home = teams.get('home', {}).get('name', 'Time Casa')
+            home = teams.get('home', {}).get('name', 'Casa')
             home_id = teams.get('home', {}).get('id', 1)
-            away = teams.get('away', {}).get('name', 'Time Fora')
+            away = teams.get('away', {}).get('name', 'Fora')
             away_id = teams.get('away', {}).get('id', 2)
             
             league_info = item.get('league', {})
@@ -83,10 +76,11 @@ def processar_jogos(filtro="todos"):
             gols_away = goals.get('away') or 0
             
             try:
-                data_jogo = raw_time.split("T")[0]
-                hora = raw_time.split("T")[1][:5]
+                hora_utc = raw_time.split("T")[1][:5]
+                h_int = int(hora_utc.split(":")[0]) - 3
+                if h_int < 0: h_int += 24
+                hora = f"{h_int:02d}:{hora_utc.split(':')[1]}"
             except:
-                data_jogo = data_hoje
                 hora = "00:00"
             
             p15, p25, btts = calcular_estatisticas_avancadas(home_id, away_id)
@@ -97,13 +91,13 @@ def processar_jogos(filtro="todos"):
             if filtro == "moderados" and not (60 <= p25 <= 80): continue
             if filtro == "altagestao" and (p25 < 75 and p15 < 85): continue
 
-            if contador >= 6: break
+            if contador >= 10: break
             
             if status_short in ["1H", "HT", "2H", "ET", "P"]:
                 status_txt = f"🔴 <b>AO VIVO ({elapsed}')</b>"
                 placar_txt = f"⚡ <b>Placar:</b> {home} {gols_home} x {gols_away} {away}\n"
             else:
-                status_txt = f"⏰ <b>{data_jogo} às {hora}</b>"
+                status_txt = f"⏰ <b>Às {hora} (Brasília)</b>"
                 placar_txt = f"⚔️ <b>{home}</b> x <b>{away}</b>\n"
             
             msg += f"🏆 <b>{country} - {league}</b>\n"
@@ -115,11 +109,11 @@ def processar_jogos(filtro="todos"):
         except Exception:
             continue
 
-    return msg if contador > 0 else "⚽ <b>MERCADO GLOBAL</b>\n\n🔥 <i>Nenhum jogo encontrado.</i>"
+    return msg if contador > 0 else f"⚽ <b>API-FOOTBALL</b>\n\n⚠️ <i>Nenhuma partida atendeu aos filtros aplicados para hoje.</i>"
 
 @app.route('/')
 def home():
-    return "🤖 Bot de Apostas Definitivo Ativo!"
+    return "🤖 Bot Limpo Ativo!"
 
 @app.route(f'/{TELEGRAM_TOKEN}', methods=['POST'])
 def webhook():
@@ -131,10 +125,10 @@ def webhook():
         
         if from_chat == TELEGRAM_CHAT_ID:
             if texto in ["/hoje", "hoje", "/jogos", "jogos", "/start"]:
-                enviar_telegram("⏳ <i>Carregando partidas e análises...</i>", from_chat)
+                enviar_telegram("⏳ <i>Consultando API oficial...</i>", from_chat)
                 enviar_telegram(processar_jogos(filtro="todos"), from_chat)
             elif texto in ["/moderados", "moderados", "/6080"]:
-                enviar_telegram("🔎 <i>Filtrando oportunidades moderadas...</i>", from_chat)
+                enviar_telegram("🔎 <i>Filtrando jogos moderados...</i>", from_chat)
                 enviar_telegram(processar_jogos(filtro="moderados"), from_chat)
             elif texto in ["/altagestao", "altagestao", "/sinais"]:
                 enviar_telegram("🔎 <i>Buscando alta confiança...</i>", from_chat)
