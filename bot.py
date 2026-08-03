@@ -50,41 +50,21 @@ def processar_jogos(dias_frente=0, filtro="todos"):
     fixtures = []
     
     try:
-        # 1. Tenta buscar pela data
+        # 1. Busca oficial pela data na API
         url = f"{API_URL}/fixtures?date={data_str}"
         response = requests.get(url, headers=HEADERS, timeout=10)
         if response.status_code == 200:
             fixtures = response.json().get("response", [])
             
-        # 2. Se a data falhar, busca os próximos jogos gerais
+        # 2. Se a data exata estiver vazia, busca os próximos jogos reais disponíveis na grade da API
         if not fixtures:
             url_next = f"{API_URL}/fixtures?next=20"
             resp_next = requests.get(url_next, headers=HEADERS, timeout=10)
             if resp_next.status_code == 200:
                 fixtures = resp_next.json().get("response", [])
 
-        # 3. Fallback de emergência (Garante que exiba jogos simulados/mock se a API gratuita estiver completamente ociosa na madrugada)
         if not fixtures:
-            fixtures = [
-                {
-                    'teams': {'home': {'name': 'Flamengo', 'id': 127}, 'away': {'name': 'Palmeiras', 'id': 121}},
-                    'league': {'name': 'Série A', 'country': 'Brazil'},
-                    'fixture': {'status': {'short': 'NS', 'elapsed': None}, 'date': f'{data_str}T20:00:00+00:00'},
-                    'goals': {'home': None, 'away': None}
-                },
-                {
-                    'teams': {'home': {'name': 'Real Madrid', 'id': 541}, 'away': {'name': 'Barcelona', 'id': 529}},
-                    'league': {'name': 'La Liga', 'country': 'Spain'},
-                    'fixture': {'status': {'short': 'NS', 'elapsed': None}, 'date': f'{data_str}T21:00:00+00:00'},
-                    'goals': {'home': None, 'away': None}
-                },
-                {
-                    'teams': {'home': {'name': 'Manchester City', 'id': 50}, 'away': {'name': 'Arsenal', 'id': 42}},
-                    'league': {'name': 'Premier League', 'country': 'England'},
-                    'fixture': {'status': {'short': 'NS', 'elapsed': None}, 'date': f'{data_str}T16:00:00+00:00'},
-                    'goals': {'home': None, 'away': None}
-                }
-            ]
+            return f"⚽ <b>MERCADO GLOBAL</b>\n\n💡 <i>Nenhum jogo oficial localizado na grade para esta data. Tente verificar os jogos de amanhã com /amanha.</i>"
 
         if dias_frente > 0:
             titulo_filtro = f"📅 PRÓXIMAS PARTIDAS DA GRADE"
@@ -172,14 +152,14 @@ def processar_jogos(dias_frente=0, filtro="todos"):
         if contador > 0:
             return msg
         
-        return f"⚽ <b>MERCADO GLOBAL ATIVO</b>\n\n🔥 <i>Nenhum jogo nesta faixa específica no momento. Tente o comando /hoje ou /over25.</i>"
+        return f"⚽ <b>MERCADO GLOBAL ATIVO</b>\n\n🔥 <i>Nenhum jogo encontrado com os critérios deste filtro na grade atual.</i>"
 
     except Exception as e:
         print(f"Erro: {e}")
-        return f"⚽ <b>MERCADO GLOBAL</b>\n\n💡 <i>Sistema operando normalmente. Use /over25 para ver as principais tendências.</i>"
+        return f"⚽ <b>MERCADO GLOBAL</b>\n\n💡 <i>Erro ao consultar os dados da API. Tente novamente em instantes.</i>"
 
 def escutar_telegram():
-    print("\nROBÔ GLOBAL COM FALLBACK ATIVO!\n")
+    print("\nROBÔ GLOBAL LIMPO (SEM MOCKS) ATIVO!\n")
     offset = None
     while True:
         try:
