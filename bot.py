@@ -50,21 +50,28 @@ def processar_jogos(dias_frente=0, filtro="todos"):
     fixtures = []
     
     try:
-        # Busca direta por live ou próximos jogos para garantir volume na grade
-        url_next = f"{API_URL}/fixtures?next=30"
-        response = requests.get(url_next, headers=HEADERS, timeout=10)
+        # 1. Tenta buscar jogos ao vivo ou da data específica informando a season atual (2026)
+        url = f"{API_URL}/fixtures?date={data_str}&season=2026"
+        response = requests.get(url, headers=HEADERS, timeout=10)
         if response.status_code == 200:
             fixtures = response.json().get("response", [])
             
-        # Se por acaso a rota next falhar, tenta por data
+        # 2. Se não vier nada por data, busca as partidas correntes/próximas gerais
         if not fixtures:
-            url = f"{API_URL}/fixtures?date={data_str}"
-            resp_date = requests.get(url, headers=HEADERS, timeout=10)
-            if resp_date.status_code == 200:
-                fixtures = resp_date.json().get("response", [])
+            url_live = f"{API_URL}/fixtures?live=all"
+            resp_live = requests.get(url_live, headers=HEADERS, timeout=10)
+            if resp_live.status_code == 200:
+                fixtures = resp_live.json().get("response", [])
+
+        # 3. Se ainda estiver vazio, busca os jogos da principal liga ativa (Ex: Brasileirão ID 71 ou Premier League ID 39)
+        if not fixtures:
+            url_league = f"{API_URL}/fixtures?league=71&season=2026"
+            resp_league = requests.get(url_league, headers=HEADERS, timeout=10)
+            if resp_league.status_code == 200:
+                fixtures = resp_league.json().get("response", [])
 
         if not fixtures:
-            return f"⚽ <b>MERCADO GLOBAL</b>\n\n💡 <i>Nenhum jogo localizado na grade no momento. Tente novamente em instantes.</i>"
+            return f"⚽ <b>MERCADO GLOBAL</b>\n\n💡 <i>Nenhum jogo localizado na grade para esta data no momento. Tente novamente mais tarde.</i>"
 
         if dias_frente > 0:
             titulo_filtro = f"📅 PRÓXIMAS PARTIDAS DA GRADE"
@@ -159,7 +166,7 @@ def processar_jogos(dias_frente=0, filtro="todos"):
         return f"⚽ <b>MERCADO GLOBAL</b>\n\n💡 <i>Erro ao consultar os dados da API. Tente novamente em instantes.</i>"
 
 def escutar_telegram():
-    print("\nROBÔ GLOBAL COM BUSCA DIRETA ATIVO!\n")
+    print("\nROBÔ GLOBAL COM SEASON 2026 ATIVO!\n")
     offset = None
     while True:
         try:
