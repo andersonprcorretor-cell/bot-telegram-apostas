@@ -7,6 +7,9 @@ API_URL = "https://v3.football.api-sports.io"
 TELEGRAM_TOKEN = "8808972104:AAGYhnYvy8uFuEaP7EarknIvUB6viHkKReE"
 TELEGRAM_CHAT_ID = "1148090241"
 
+# URL corrigida com o "s" no final ("bot-telegram-apostas")
+RENDER_URL = "https://bot-telegram-apostas.onrender.com"
+
 HEADERS = {"x-apisports-key": API_KEY}
 
 app = Flask(__name__)
@@ -41,7 +44,6 @@ def processar_jogos(dias_frente=0, filtro="todos"):
     fixtures = []
     
     try:
-        # TENTATIVA 1: Busca por data específica com season 2026
         url_date = f"{API_URL}/fixtures?date={data_str}&season=2026"
         print(f"Consultando API (Data): {url_date}")
         resp = requests.get(url_date, headers=HEADERS, timeout=10)
@@ -49,7 +51,6 @@ def processar_jogos(dias_frente=0, filtro="todos"):
             fixtures = resp.json().get("response", [])
             print(f"Jogos encontrados na Data ({data_str}): {len(fixtures)}")
 
-        # TENTATIVA 2: Se vier vazio, busca os próximos 20 jogos gerais da API
         if not fixtures:
             url_next = f"{API_URL}/fixtures?next=20"
             print(f"Consultando API (Next): {url_next}")
@@ -58,7 +59,6 @@ def processar_jogos(dias_frente=0, filtro="todos"):
                 fixtures = resp_next.json().get("response", [])
                 print(f"Jogos encontrados via Next: {len(fixtures)}")
 
-        # TENTATIVA 3: Se ainda estiver vazio, busca os jogos da principal liga ativa (Brasileirão - ID 71)
         if not fixtures:
             url_league = f"{API_URL}/fixtures?league=71&season=2026"
             print(f"Consultando API (League 71): {url_league}")
@@ -151,11 +151,12 @@ def processar_jogos(dias_frente=0, filtro="todos"):
 
 @app.route('/')
 def home():
-    return "🤖 Robô Webhook Ativo!"
+    return "🤖 Robô Webhook Ativo com Sucesso!"
 
 @app.route(f'/{TELEGRAM_TOKEN}', methods=['POST'])
 def webhook():
     data = request.get_json()
+    print(f"Mensagem recebida do Telegram: {data}")
     if data and "message" in data:
         message = data["message"]
         texto = message.get("text", "").strip().lower()
@@ -200,8 +201,10 @@ def webhook():
     return "OK", 200
 
 def configurar_webhook():
-    url_webhook = f"https://bot-telegram-aposta.onrender.com/{TELEGRAM_TOKEN}"
-    requests.get(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/setWebhook?url={url_webhook}")
+    url_webhook = f"{RENDER_URL}/{TELEGRAM_TOKEN}"
+    req_url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/setWebhook?url={url_webhook}"
+    res = requests.get(req_url).json()
+    print(f"Configuração do Webhook: {res}")
 
 if __name__ == "__main__":
     configurar_webhook()
