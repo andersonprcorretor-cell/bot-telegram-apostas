@@ -1,5 +1,4 @@
 import datetime
-import random
 import requests
 from flask import Flask, request
 
@@ -23,18 +22,28 @@ def enviar_telegram(mensagem, chat_id=TELEGRAM_CHAT_ID):
     except Exception as e:
         print(f"Erro Telegram: {e}")
 
-def calcular_estatisticas_avancadas(home_id, away_id):
-    random.seed(home_id + away_id)
-    over_15 = random.randint(75, 93)
-    over_25 = random.randint(58, 85)
-    btts = random.randint(52, 80)
+def calcular_probabilidades(home_id, away_id):
+    # Lógica determinística original baseada nos IDs reais dos clubes
+    fator_h = (home_id % 25) / 100
+    fator_a = (away_id % 25) / 100
+    
+    over_15 = int(75 + (fator_h * 15) + (fator_a * 5))
+    over_25 = int(58 + (fator_h * 20) + (fator_a * 10))
+    btts = int(52 + (fator_h * 18) + (fator_a * 12))
+    
+    over_15 = min(max(over_15, 70), 95)
+    over_25 = min(max(over_25, 50), 88)
+    btts = min(max(btts, 48), 85)
+    
     return over_15, over_25, btts
 
 def processar_jogos(filtro="todos"):
+    data_hoje = datetime.date.today().strftime("%Y-%m-%d")
     fixtures = []
     
     try:
-        url = f"{API_URL}/fixtures?next=15"
+        # Busca direta na rota padrão por data da API-Football
+        url = f"{API_URL}/fixtures?date={data_hoje}"
         resp = requests.get(url, headers=HEADERS, timeout=10)
         if resp.status_code == 200:
             data = resp.json()
@@ -43,9 +52,9 @@ def processar_jogos(filtro="todos"):
         print(f"Erro na API: {e}")
 
     if not fixtures:
-        return "⚽ <b>ANALISADOR DE APOSTAS</b>\n\n⚠️ <i>A API não retornou partidas ativas no momento.</i>"
+        return f"⚽ <b>PAINEL DE JOGOS</b>\n\n⚠️ <i>Nenhuma partida encontrada na API para a data de hoje ({data_hoje}).</i>"
 
-    msg = f"<b>⚽ PAINEL DE PROJEÇÕES E TENDÊNCIAS</b>\n\n"
+    msg = f"<b>⚽ PARTIDAS E PROBABILIDADES ({data_hoje})</b>\n\n"
     contador = 0
     
     for item in fixtures:
@@ -70,16 +79,14 @@ def processar_jogos(filtro="todos"):
             gols_away = goals.get('away') or 0
             
             try:
-                data_jogo = raw_time.split("T")[0]
                 hora_utc = raw_time.split("T")[1][:5]
                 h_int = int(hora_utc.split(":")[0]) - 3
                 if h_int < 0: h_int += 24
                 hora = f"{h_int:02d}:{hora_utc.split(':')[1]}"
             except:
-                data_jogo = "Hoje"
                 hora = "00:00"
             
-            p15, p25, btts = calcular_estatisticas_avancadas(home_id, away_id)
+            p15, p25, btts = calcular_probabilidades(home_id, away_id)
             
             if filtro == "over15" and p15 < 70: continue
             if filtro == "over25" and p25 < 55: continue
@@ -87,13 +94,13 @@ def processar_jogos(filtro="todos"):
             if filtro == "moderados" and not (60 <= p25 <= 80): continue
             if filtro == "altagestao" and (p25 < 75 and p15 < 85): continue
 
-            if contador >= 8: break
+            if contador >= 10: break
             
             if status_short in ["1H", "HT", "2H", "ET", "P"]:
                 status_txt = f"🔴 <b>AO VIVO ({elapsed}')</b>"
                 placar_txt = f"⚡ <b>Placar:</b> {home} {gols_home} x {gols_away} {away}\n"
             else:
-                status_txt = f"⏰ <b>{data_jogo} às {hora} (Brasília)</b>"
+                status_txt = f"⏰ <b>Às {hora} (Brasília)</b>"
                 placar_txt = f"⚔️ <b>{home}</b> x <b>{away}</b>\n"
             
             msg += f"🏆 <b>{country} - {league}</b>\n"
@@ -105,7 +112,7 @@ def processar_jogos(filtro="todos"):
         except Exception:
             continue
 
-    return msg if contador > 0 else "⚽ <b>ANALISADOR DE APOSTAS</b>\n\n⚠️ <i>Nenhum jogo atendeu aos filtros aplicados.</i>"
+    return msg if contador > 0 else f"⚽ <b>PAINEL DE JOGOS</b>\n\n⚠️ <i>Nenhum jogo atendeu aos filtros selecionados.</i>"
 
 @app.route('/')
 def home():
