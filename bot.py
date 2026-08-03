@@ -50,21 +50,21 @@ def processar_jogos(dias_frente=0, filtro="todos"):
     fixtures = []
     
     try:
-        # 1. Busca oficial pela data na API
-        url = f"{API_URL}/fixtures?date={data_str}"
-        response = requests.get(url, headers=HEADERS, timeout=10)
+        # Busca direta por live ou próximos jogos para garantir volume na grade
+        url_next = f"{API_URL}/fixtures?next=30"
+        response = requests.get(url_next, headers=HEADERS, timeout=10)
         if response.status_code == 200:
             fixtures = response.json().get("response", [])
             
-        # 2. Se a data exata estiver vazia, busca os próximos jogos reais disponíveis na grade da API
+        # Se por acaso a rota next falhar, tenta por data
         if not fixtures:
-            url_next = f"{API_URL}/fixtures?next=20"
-            resp_next = requests.get(url_next, headers=HEADERS, timeout=10)
-            if resp_next.status_code == 200:
-                fixtures = resp_next.json().get("response", [])
+            url = f"{API_URL}/fixtures?date={data_str}"
+            resp_date = requests.get(url, headers=HEADERS, timeout=10)
+            if resp_date.status_code == 200:
+                fixtures = resp_date.json().get("response", [])
 
         if not fixtures:
-            return f"⚽ <b>MERCADO GLOBAL</b>\n\n💡 <i>Nenhum jogo oficial localizado na grade para esta data. Tente verificar os jogos de amanhã com /amanha.</i>"
+            return f"⚽ <b>MERCADO GLOBAL</b>\n\n💡 <i>Nenhum jogo localizado na grade no momento. Tente novamente em instantes.</i>"
 
         if dias_frente > 0:
             titulo_filtro = f"📅 PRÓXIMAS PARTIDAS DA GRADE"
@@ -159,7 +159,7 @@ def processar_jogos(dias_frente=0, filtro="todos"):
         return f"⚽ <b>MERCADO GLOBAL</b>\n\n💡 <i>Erro ao consultar os dados da API. Tente novamente em instantes.</i>"
 
 def escutar_telegram():
-    print("\nROBÔ GLOBAL LIMPO (SEM MOCKS) ATIVO!\n")
+    print("\nROBÔ GLOBAL COM BUSCA DIRETA ATIVO!\n")
     offset = None
     while True:
         try:
