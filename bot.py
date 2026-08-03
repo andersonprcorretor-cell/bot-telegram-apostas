@@ -36,22 +36,26 @@ def calcular_estatisticas_avancadas(home_id, away_id):
     return over_15, over_25, btts
 
 def processar_jogos(filtro="todos"):
-    data_hoje = datetime.date.today().strftime("%Y-%m-%d")
     fixtures = []
     
     try:
-        url = f"{API_URL}/fixtures?date={data_hoje}"
+        # Usando o endpoint 'next=20' para garantir a busca contínua na grade oficial da API
+        url = f"{API_URL}/fixtures?next=20"
+        print(f"Consultando API Oficial: {url}")
         resp = requests.get(url, headers=HEADERS, timeout=10)
+        print(f"Status Code: {resp.status_code}")
+        
         if resp.status_code == 200:
             data = resp.json()
             fixtures = data.get("response", [])
+            print(f"Total de jogos reais retornados: {len(fixtures)}")
     except Exception as e:
-        print(f"Erro na API: {e}")
+        print(f"Erro de conexão com a API: {e}")
 
     if not fixtures:
-        return f"⚽ <b>API-FOOTBALL</b>\n\n⚠️ <i>A API não retornou nenhuma partida oficial cadastrada para a data de hoje ({data_hoje}). Nenhum dado simulado foi injetado.</i>"
+        return f"⚽ <b>API-FOOTBALL</b>\n\n⚠️ <i>A API não retornou partidas ativas na grade no momento.</i>"
 
-    msg = f"<b>⚽ PARTIDAS REAIS DA API ({data_hoje})</b>\n\n"
+    msg = f"<b>⚽ PARTIDAS REAIS DA GRADE (API)</b>\n\n"
     contador = 0
     
     for item in fixtures:
@@ -76,11 +80,13 @@ def processar_jogos(filtro="todos"):
             gols_away = goals.get('away') or 0
             
             try:
+                data_jogo = raw_time.split("T")[0]
                 hora_utc = raw_time.split("T")[1][:5]
                 h_int = int(hora_utc.split(":")[0]) - 3
                 if h_int < 0: h_int += 24
                 hora = f"{h_int:02d}:{hora_utc.split(':')[1]}"
             except:
+                data_jogo = "Hoje"
                 hora = "00:00"
             
             p15, p25, btts = calcular_estatisticas_avancadas(home_id, away_id)
@@ -97,7 +103,7 @@ def processar_jogos(filtro="todos"):
                 status_txt = f"🔴 <b>AO VIVO ({elapsed}')</b>"
                 placar_txt = f"⚡ <b>Placar:</b> {home} {gols_home} x {gols_away} {away}\n"
             else:
-                status_txt = f"⏰ <b>Às {hora} (Brasília)</b>"
+                status_txt = f"⏰ <b>{data_jogo} às {hora} (Brasília)</b>"
                 placar_txt = f"⚔️ <b>{home}</b> x <b>{away}</b>\n"
             
             msg += f"🏆 <b>{country} - {league}</b>\n"
@@ -109,11 +115,11 @@ def processar_jogos(filtro="todos"):
         except Exception:
             continue
 
-    return msg if contador > 0 else f"⚽ <b>API-FOOTBALL</b>\n\n⚠️ <i>Nenhuma partida atendeu aos filtros aplicados para hoje.</i>"
+    return msg if contador > 0 else f"⚽ <b>API-FOOTBALL</b>\n\n⚠️ <i>Nenhuma partida atendeu aos filtros aplicados.</i>"
 
 @app.route('/')
 def home():
-    return "🤖 Bot Limpo Ativo!"
+    return "🤖 Bot Atualizado Ativo!"
 
 @app.route(f'/{TELEGRAM_TOKEN}', methods=['POST'])
 def webhook():
@@ -125,7 +131,7 @@ def webhook():
         
         if from_chat == TELEGRAM_CHAT_ID:
             if texto in ["/hoje", "hoje", "/jogos", "jogos", "/start"]:
-                enviar_telegram("⏳ <i>Consultando API oficial...</i>", from_chat)
+                enviar_telegram("⏳ <i>Consultando grade oficial na API...</i>", from_chat)
                 enviar_telegram(processar_jogos(filtro="todos"), from_chat)
             elif texto in ["/moderados", "moderados", "/6080"]:
                 enviar_telegram("🔎 <i>Filtrando jogos moderados...</i>", from_chat)
