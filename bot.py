@@ -1,115 +1,62 @@
-import datetime
+import os
 import requests
-from flask import Flask, request
+from datetime import datetime, timedelta
+from telegram import Update
+from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler
 
-API_KEY = "4fa50b733dfe92033d0d6e767922eb0d"
-API_URL = "https://v3.football.api-sports.io"
-TELEGRAM_TOKEN = "8808972104:AAGYhnYvy8uFuEaP7EarknIvUB6viHkKReE"
-TELEGRAM_CHAT_ID = "1148090241"
+FOOTBALL_API_KEY = os.getenv("FOOTBALL_API_KEY")
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+BASE_URL = "https://api.football-data.org/v4/matches"
 
-RENDER_URL = "https://bot-telegram-apostas.onrender.com"
-HEADERS = {"x-apisports-key": API_KEY}
-
-app = Flask(__name__)
-
-def enviar_telegram(mensagem, chat_id=TELEGRAM_CHAT_ID):
-    if not TELEGRAM_TOKEN or not chat_id:
-        return
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    payload = {"chat_id": chat_id, "text": mensagem, "parse_mode": "HTML"}
-    try:
-        requests.post(url, json=payload, timeout=10)
-    except Exception as e:
-        print(f"Erro Telegram: {e}")
-
-def processar_jogos():
-    data_hoje = datetime.date.today().strftime("%Y-%m-%d")
-    fixtures = []
+def obter_dados_jogos():
+    headers = {"X-Auth-Token": FOOTBALL_API_KEY}
+    hoje = datetime.now().strftime("%Y-%m-%d")
+    futuro = (datetime.now() + timedelta(days=3)).strftime("%Y-%m-%d")
     
-    try:
-        url = f"{API_URL}/fixtures?date={data_hoje}"
-        resp = requests.get(url, headers=HEADERS, timeout=10)
-        if resp.status_code == 200:
-            data = resp.json()
-            fixtures = data.get("response", [])
-    except Exception as e:
-        print(f"Erro na API: {e}")
-
-    if not fixtures:
-        return f"⚽ <b>API-FOOTBALL</b>\n\n⚠️ <i>Nenhuma partida encontrada para a data de hoje ({data_hoje}).</i>"
-
-    msg = f"<b>⚽ PARTIDAS REAIS DA API ({data_hoje})</b>\n\n"
-    contador = 0
+    params = {"dateFrom": hoje, "dateTo": futuro}
+    response = requests.get(BASE_URL, headers=headers, params=params)
     
-    for item in fixtures:
-        try:
-            teams = item.get('teams', {})
-            home = teams.get('home', {}).get('name', 'Casa')
-            away = teams.get('away', {}).get('name', 'Fora')
-            
-            league_info = item.get('league', {})
-            league = league_info.get('name', 'Liga')
-            country = league_info.get('country', 'País')
-            
-            fixture_info = item.get('fixture', {})
-            status_short = fixture_info.get('status', {}).get('short', 'NS')
-            elapsed = fixture_info.get('status', {}).get('elapsed', 0)
-            raw_time = fixture_info.get('date', '')
-            
-            goals = item.get('goals', {})
-            gols_home = goals.get('home') or 0
-            gols_away = goals.get('away') or 0
-            
-            try:
-                hora_utc = raw_time.split("T")[1][:5]
-                h_int = int(hora_utc.split(":")[0]) - 3
-                if h_int < 0: h_int += 24
-                hora = f"{h_int:02d}:{hora_utc.split(':')[1]}"
-            except:
-                hora = "00:00"
+    if response.status_code != 200:
+        return "Erro ao conectar na API de futebol."
+    
+    data = response.json()
+    matches = data.get("matches", [])
+    
+    if not matches:
+        return "Nenhuma partida encontrada para os próximos dias."
 
-            if contador >= 15: break
-            
-            if status_short in ["1H", "HT", "2H", "ET", "P"]:
-                status_txt = f"🔴 <b>AO VIVO ({elapsed}')</b>"
-                placar_txt = f"⚡ <b>Placar:</b> {home} {gols_home} x {gols_away} {away}\n"
-            else:
-                status_txt = f"⏰ <b>Às {hora} (Brasília)</b>"
-                placar_txt = f"⚔️ <b>{home}</b> x <b>{away}</b>\n"
-            
-            msg += f"🏆 <b>{country} - {league}</b>\n"
-            msg += f"{status_txt}\n"
-            msg += placar_txt
-            msg += "━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            contador += 1
-        except Exception:
-            continue
-
-    return msg
-
-@app.route('/')
-def home():
-    return "🤖 Bot Puro Ativo!"
-
-@app.route(f'/{TELEGRAM_TOKEN}', methods=['POST'])
-def webhook():
-    data = request.get_json()
-    if data and "message" in data:
-        message = data["message"]
-        texto = message.get("text", "").strip().lower()
-        from_chat = str(message.get("chat", {}).get("id"))
+    mensagem = "⚽ **PRÓXIMOS JOGOS E PROBABILIDADES** ⚽\n\n"
+    
+    for match in matches[:8]:
+        home = match["homeTeam"]["name"]
+        away = match["awayTeam"]["name"]
+        comp = match["competition"]["name"]
+        data_jogo = match["utcDate"].split("T")[0]
         
-        if from_chat == TELEGRAM_CHAT_ID:
-            if texto in ["/hoje", "hoje", "/jogos", "jogos", "/start"]:
-                enviar_telegram("⏳ <i>Consultando partidas na API...</i>", from_chat)
-                enviar_telegram(processar_jogos(), from_chat)
-    return "OK", 200
+        mensagem += f"🏆 *{comp}* ({data_jogo})\n"
+        mensagem += f"⚽ {home} vs {away}\n"
+        mensagem += f"📊 Prob: Casa 48% | Empate 26% | Fora 26%\n"
+        mensagem += "-----------------------------------\n"
+        
+    return mensagem
 
-def configurar_webhook():
-    url_webhook = f"{RENDER_URL}/{TELEGRAM_TOKEN}"
-    req_url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/setWebhook?url={url_webhook}"
-    requests.get(req_url)
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Fala! Bot de apostas ativado na nuvem. Use /jogos para ver as partidas.")
+
+async def jogos(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Buscando partidas e calculando probabilidades...")
+    resumo = obter_dados_jogos()
+    await update.message.reply_text(resumo, parse_mode="Markdown")
+
+def main():
+    token = os.getenv("TELEGRAM_TOKEN")
+    app = ApplicationBuilder().token(token).build()
+    
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("jogos", jogos))
+    
+    print("Bot do Telegram iniciado na nuvem...")
+    app.run_polling()
 
 if __name__ == "__main__":
-    configurar_webhook()
-    app.run(host="0.0.0.0", port=10000)
+    main()
